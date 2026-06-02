@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OBS Scene Transitions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0d0f;
+      --bg1: #141417;
+      --bg2: #1a1a1f;
+      --bg3: #222228;
+      --bg4: #2a2a32;
+      --border: #2a2a32;
+      --border2: #35353f;
+      --text: #e2e2e8;
+      --muted: #6b6b7a;
+      --accent: #7c5cfc;
+      --accent2: #5c8afc;
+      --green: #22d3a0;
+      --red: #f0483e;
+      --yellow: #f5a623;
+      --orange: #f07823;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Syne', sans-serif;
+
+      --tr-fade: #7c5cfc;
+      --tr-slide: #5c8afc;
+      --tr-zoom: #22d3a0;
+      --tr-cut:  #f5a623;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ─────────────────────────────── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 44px;
+      padding: 0 14px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .hd-left  { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .hd-center { display: flex; align-items: center; gap: 6px; }
+    .hd-right { display: flex; align-items: center; gap: 6px; flex: 1; justify-content: flex-end; }
+
+    .app-title {
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text);
+      margin-right: 8px;
+    }
+    .app-title span { color: var(--accent); }
+
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      transition: background .3s, box-shadow .3s;
+    }
+    .dot.disconnected { background: var(--muted); }
+    .dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot.transitioning { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 0.6s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    #obs-label { font-weight: 600; font-size: 10px; letter-spacing: .5px; white-space: nowrap; }
+
+    .obs-connect-row { display: flex; gap: 4px; align-items: center; }
+    .obs-connect-row.hidden { display: none; }
+    .obs-connect-row input {
+      background: var(--bg3); border: 1px solid var(--border2);
+      color: var(--text); padding: 3px 7px; border-radius: 3px;
+      font-family: var(--mono); font-size: 10px; width: 160px;
+    }
+    .obs-connect-row input:focus { outline: none; border-color: var(--accent); }
+    .obs-connect-row button {
+      background: var(--accent); color: #fff; border: none;
+      padding: 3px 10px; border-radius: 3px; cursor: pointer;
+      font-family: var(--mono); font-size: 10px; font-weight: 600;
+      transition: opacity .15s;
+    }
+    .obs-connect-row button:hover { opacity: .85; }
+
+    #current-scene-display {
+      font-size: 10px; color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    #scene-badge {
+      background: var(--bg3); border: 1px solid var(--border2);
+      padding: 2px 8px; border-radius: 3px;
+      color: var(--text); font-weight: 600;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ── MAIN LAYOUT ─────────────────────────────── */
+    #body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ── LEFT: SCENE LIST ─────────────────────────── */
+    #left-panel {
+      background: var(--bg1);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--muted);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .panel-header .count {
+      background: var(--bg3);
+      padding: 1px 6px;
+      border-radius: 10px;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    #scenes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    #scenes-list::-webkit-scrollbar { width: 4px; }
+    #scenes-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .scene-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 2px;
+      transition: background .12s;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+    .scene-item:hover { background: var(--bg3); }
+    .scene-item.active {
+      background: rgba(124,92,252,.15);
+      border-color: rgba(124,92,252,.35);
+    }
+    .scene-item.active .scene-name { color: var(--accent); }
+    .scene-item.live-preview {
+      border-color: rgba(92,138,252,.4);
+      background: rgba(92,138,252,.08);
+    }
+    .scene-item.live-preview .scene-name { color: var(--accent2); }
+
+    .scene-thumb {
+      width: 48px; height: 27px;
+      background: var(--bg3);
+      border-radius: 3px;
+      border: 1px solid var(--border2);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .scene-thumb .thumb-letter {
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .scene-thumb.active-thumb { border-color: var(--accent); }
+
+    .scene-name {
+      flex: 1;
+      font-size: 11px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .scene-live-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    .muted-msg {
+      color: var(--muted);
+      font-size: 10px;
+      padding: 12px 10px;
+      line-height: 1.6;
+    }
+
+    /* ── RIGHT: TRANSITIONS PANEL ────────────────── */
+    #right-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* Transition type cards */
+    #transition-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tr-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 10px 10px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+    }
+    .tr-card:hover { background: var(--bg3); }
+    .tr-card.selected { border-color: var(--tr-color); background: rgba(0,0,0,.3); }
+    .tr-card.selected .tr-name { color: var(--tr-color); }
+    .tr-card.selected .tr-preview-area { border-color: var(--tr-color); }
+
+    .tr-card[data-type="fade"]  { --tr-color: var(--tr-fade); }
+    .tr-card[data-type="slide"] { --tr-color: var(--tr-slide); }
+    .tr-card[data-type="zoom"]  { --tr-color: var(--tr-zoom); }
+    .tr-card[data-type="cut"]   { --tr-color: var(--tr-cut); }
+
+    .tr-preview-area {
+      width: 100%;
+      height: 52px;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 5px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Fade animation preview */
+    .tr-card[data-type="fade"] .tr-a {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #3a1f7a 0%, #5c3acc 100%);
+      animation: previewFadeA 2.5s ease-in-out infinite;
+    }
+    .tr-card[data-type="fade"] .tr-b {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #1a4a6b 0%, #2a7acc 100%);
+      animation: previewFadeB 2.5s ease-in-out infinite;
+    }
+    @keyframes previewFadeA { 0%,30%{opacity:1} 50%,80%{opacity:0} 100%{opacity:1} }
+    @keyframes previewFadeB { 0%,30%{opacity:0} 50%,80%{opacity:1} 100%{opacity:0} }
+
+    /* Slide animation preview */
+    .tr-card[data-type="slide"] .tr-a {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #3a1f7a 0%, #5c3acc 100%);
+      animation: previewSlideA 2.5s ease-in-out infinite;
+    }
+    .tr-card[data-type="slide"] .tr-b {
+      position: absolute; top:0; bottom:0; left: 100%; width: 100%;
+      background: linear-gradient(135deg, #1a4a6b 0%, #2a7acc 100%);
+      animation: previewSlideB 2.5s ease-in-out infinite;
+    }
+    @keyframes previewSlideA { 0%,30%{transform:translateX(0)} 50%,80%{transform:translateX(-100%)} 100%{transform:translateX(0)} }
+    @keyframes previewSlideB { 0%,30%{transform:translateX(0)} 50%,80%{transform:translateX(-100%)} 100%{transform:translateX(0)} }
+
+    /* Zoom animation preview */
+    .tr-card[data-type="zoom"] .tr-a {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #3a1f7a 0%, #5c3acc 100%);
+      animation: previewZoomA 2.5s ease-in-out infinite;
+    }
+    .tr-card[data-type="zoom"] .tr-b {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #1a4a6b 0%, #2a7acc 100%);
+      opacity: 0;
+      animation: previewZoomB 2.5s ease-in-out infinite;
+    }
+    @keyframes previewZoomA { 0%,30%{transform:scale(1);opacity:1} 50%,80%{transform:scale(2.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+    @keyframes previewZoomB { 0%,30%{opacity:0;transform:scale(.3)} 50%,80%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(.3)} }
+
+    /* Cut animation preview */
+    .tr-card[data-type="cut"] .tr-a {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #3a1f7a 0%, #5c3acc 100%);
+      animation: previewCutA 1.6s steps(1) infinite;
+    }
+    .tr-card[data-type="cut"] .tr-b {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #1a4a6b 0%, #2a7acc 100%);
+      animation: previewCutB 1.6s steps(1) infinite;
+    }
+    @keyframes previewCutA { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+    @keyframes previewCutB { 0%,49%{opacity:0} 50%,100%{opacity:1} }
+
+    .tr-name {
+      font-family: var(--sans);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--text);
+      transition: color .15s;
+    }
+
+    /* Selected indicator dot */
+    .tr-card::after {
+      content: '';
+      position: absolute;
+      top: 7px; right: 8px;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--tr-color);
+      opacity: 0;
+      transition: opacity .15s;
+    }
+    .tr-card.selected::after { opacity: 1; }
+
+    /* ── SETTINGS ROW ──────────────────────────── */
+    #settings-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg1);
+    }
+
+    .setting-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .setting-label {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .setting-value {
+      font-size: 11px;
+      color: var(--text);
+      font-weight: 700;
+      min-width: 40px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: var(--bg4);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform .1s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+    select {
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      color: var(--text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus { border-color: var(--accent); }
+
+    .divider { width: 1px; height: 20px; background: var(--border); }
+
+    /* Hotkey toggle */
+    .hotkey-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+    }
+    .toggle-switch {
+      width: 28px; height: 15px;
+      background: var(--bg4);
+      border-radius: 8px;
+      cursor: pointer;
+      position: relative;
+      transition: background .2s;
+    }
+    .toggle-switch.on { background: var(--accent); }
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 11px; height: 11px;
+      border-radius: 50%;
+      background: var(--text);
+      transition: transform .2s;
+    }
+    .toggle-switch.on::after { transform: translateX(13px); }
+
+    /* ── SCENE TRANSITION GRID ─────────────────── */
+    #quick-launch {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+    }
+    #quick-launch::-webkit-scrollbar { width: 4px; }
+    #quick-launch::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .ql-header {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .ql-header .hint {
+      font-size: 9px;
+      color: var(--muted);
+      opacity: .6;
+    }
+
+    #scene-buttons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+
+    .scene-btn {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 10px;
+      cursor: pointer;
+      transition: border-color .12s, background .12s, transform .08s;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
+    }
+    .scene-btn:hover { background: var(--bg3); border-color: var(--border2); }
+    .scene-btn:active { transform: scale(.97); }
+    .scene-btn.active {
+      border-color: var(--green);
+      background: rgba(34,211,160,.08);
+    }
+    .scene-btn.transitioning-to {
+      border-color: var(--accent);
+      animation: btnGlow .6s ease-in-out;
+    }
+    @keyframes btnGlow {
+      0%{box-shadow:0 0 0 0 rgba(124,92,252,.6)}
+      50%{box-shadow:0 0 0 8px rgba(124,92,252,0)}
+      100%{box-shadow:none}
+    }
+
+    .scene-btn-index {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .5px;
+    }
+    .scene-btn.active .scene-btn-index { color: var(--green); }
+
+    .scene-btn-name {
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .scene-btn.active .scene-btn-name { color: var(--green); }
+
+    .scene-btn-tr {
+      font-size: 9px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* Live indicator */
+    .live-indicator {
+      position: absolute;
+      top: 7px; right: 8px;
+      display: flex; align-items: center; gap: 3px;
+      font-size: 8px;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: .5px;
+    }
+    .live-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: blink 1s infinite;
+    }
+
+    /* ── FOOTER LOG ────────────────────────────── */
+    #log-bar {
+      height: 28px;
+      background: var(--bg1);
+      border-top: 1px solid var(--border);
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+    #log-text {
+      font-size: 10px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    #log-text.ok { color: var(--green); }
+    #log-text.err { color: var(--red); }
+    #log-text.info { color: var(--accent); }
+
+
+
+    /* ── BUTTON TRANSITION FX ───────────────────── */
+
+    /* FADE: el botón destino pulsa su opacidad */
+    @keyframes btnFadePulse {
+      0%   { opacity: 1 }
+      30%  { opacity: 0.15 }
+      70%  { opacity: 0.15 }
+      100% { opacity: 1 }
+    }
+    .scene-btn.fx-fade {
+      animation: btnFadePulse var(--fx-dur, 500ms) ease-in-out forwards;
+    }
+
+    /* SLIDE: el botón se desliza fuera y vuelve */
+    @keyframes btnSlideLeft {
+      0%   { transform: translateX(0)    opacity: 1 }
+      35%  { transform: translateX(-18px); opacity: 0 }
+      36%  { transform: translateX(18px);  opacity: 0 }
+      100% { transform: translateX(0);     opacity: 1 }
+    }
+    @keyframes btnSlideRight {
+      0%   { transform: translateX(0);    opacity: 1 }
+      35%  { transform: translateX(18px); opacity: 0 }
+      36%  { transform: translateX(-18px);opacity: 0 }
+      100% { transform: translateX(0);    opacity: 1 }
+    }
+    @keyframes btnSlideUp {
+      0%   { transform: translateY(0);    opacity: 1 }
+      35%  { transform: translateY(-14px);opacity: 0 }
+      36%  { transform: translateY(14px); opacity: 0 }
+      100% { transform: translateY(0);    opacity: 1 }
+    }
+    @keyframes btnSlideDown {
+      0%   { transform: translateY(0);   opacity: 1 }
+      35%  { transform: translateY(14px);opacity: 0 }
+      36%  { transform: translateY(-14px);opacity: 0 }
+      100% { transform: translateY(0);   opacity: 1 }
+    }
+    .scene-btn.fx-slide-left  { animation: btnSlideLeft  var(--fx-dur, 500ms) cubic-bezier(.4,0,.2,1) forwards; }
+    .scene-btn.fx-slide-right { animation: btnSlideRight var(--fx-dur, 500ms) cubic-bezier(.4,0,.2,1) forwards; }
+    .scene-btn.fx-slide-up    { animation: btnSlideUp    var(--fx-dur, 500ms) cubic-bezier(.4,0,.2,1) forwards; }
+    .scene-btn.fx-slide-down  { animation: btnSlideDown  var(--fx-dur, 500ms) cubic-bezier(.4,0,.2,1) forwards; }
+
+    /* ZOOM: el botón destino escala */
+    @keyframes btnZoomIn {
+      0%   { transform: scale(1);    opacity: 1 }
+      35%  { transform: scale(1.18); opacity: 0 }
+      36%  { transform: scale(0.7);  opacity: 0 }
+      100% { transform: scale(1);    opacity: 1 }
+    }
+    .scene-btn.fx-zoom {
+      animation: btnZoomIn var(--fx-dur, 500ms) cubic-bezier(.4,0,.2,1) forwards;
+    }
+
+    /* CUT: flash de color instantáneo en el botón */
+    @keyframes btnCutFlash {
+      0%   { background: var(--tr-cut); border-color: var(--tr-cut); }
+      100% { background: var(--bg2);    border-color: var(--border); }
+    }
+    .scene-btn.fx-cut {
+      animation: btnCutFlash 180ms steps(1) forwards;
+    }
+
+    /* Todos los OTROS botones (no destino) se atenúan durante la transición */
+    @keyframes btnDimOthers {
+      0%,100% { opacity: 1 }
+      20%,80% { opacity: 0.35 }
+    }
+    .scene-btn.fx-dim {
+      animation: btnDimOthers var(--fx-dur, 500ms) ease-in-out forwards;
+    }
+
+    /* Barra de progreso en el botón activo */
+    .scene-btn .btn-progress {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 2px;
+      background: var(--accent);
+      width: 0%;
+      border-radius: 0 0 8px 8px;
+      transition: width linear;
+    }
+  </style>
+</head>
+<body>
+
+
+
+<!-- HEADER -->
+<header id="header">
+  <div class="hd-left">
+    <div class="app-title"><span>OBS</span> Transitions</div>
+    <div id="obs-dot" class="dot disconnected"></div>
+    <span id="obs-label">DISCONNECTED</span>
+    <div class="obs-connect-row" id="obs-connect-row">
+      <input id="obs-url" type="text" value="ws://localhost:4455" placeholder="ws://localhost:4455">
+      <input id="obs-pass" type="password" placeholder="password">
+      <button id="btn-obs-connect">Connect</button>
+    </div>
+  </div>
+
+  <div class="hd-center">
+    <div id="current-scene-display">
+      <span>LIVE</span>
+      <span id="scene-badge">—</span>
+    </div>
+  </div>
+
+  <div class="hd-right">
+    <span style="font-size:10px;color:var(--muted);">v1.0</span>
+  </div>
+</header>
+
+<!-- BODY -->
+<main id="body">
+
+  <!-- LEFT: Scene list -->
+  <aside id="left-panel">
+    <div class="panel-header">
+      Escenas
+      <span class="count" id="scenes-count">0</span>
+    </div>
+    <div id="scenes-list">
+      <div class="muted-msg">Conecta OBS para ver las escenas disponibles.</div>
+    </div>
+  </aside>
+
+  <!-- RIGHT -->
+  <section id="right-panel">
+
+    <!-- Transition type selector -->
+    <div id="transition-grid">
+      <div class="tr-card selected" data-type="fade">
+        <div class="tr-preview-area"><div class="tr-a"></div><div class="tr-b"></div></div>
+        <div class="tr-name">Fade</div>
+      </div>
+      <div class="tr-card" data-type="slide">
+        <div class="tr-preview-area"><div class="tr-a"></div><div class="tr-b"></div></div>
+        <div class="tr-name">Slide</div>
+      </div>
+      <div class="tr-card" data-type="zoom">
+        <div class="tr-preview-area"><div class="tr-a"></div><div class="tr-b"></div></div>
+        <div class="tr-name">Zoom</div>
+      </div>
+      <div class="tr-card" data-type="cut">
+        <div class="tr-preview-area"><div class="tr-a"></div><div class="tr-b"></div></div>
+        <div class="tr-name">Corte</div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings-row">
+      <div class="setting-group">
+        <span class="setting-label">Duración</span>
+        <input type="range" id="duration-slider" min="50" max="2000" value="500" step="50" style="width:90px;">
+        <span class="setting-value" id="duration-val">500ms</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="setting-group">
+        <span class="setting-label">Dirección</span>
+        <select id="slide-dir">
+          <option value="left">← izquierda</option>
+          <option value="right">→ derecha</option>
+          <option value="up">↑ arriba</option>
+          <option value="down">↓ abajo</option>
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="setting-group">
+        <span class="setting-label">Easing</span>
+        <select id="easing">
+          <option value="Linear">Linear</option>
+          <option value="EaseIn">Ease In</option>
+          <option value="EaseOut" selected>Ease Out</option>
+          <option value="EaseInOut">Ease InOut</option>
+        </select>
+      </div>
+
+      <div class="hotkey-group">
+        <span class="setting-label">Hotkeys</span>
+        <div class="toggle-switch on" id="hotkey-toggle"></div>
+      </div>
+    </div>
+
+    <!-- Scene quick-launch buttons -->
+    <div id="quick-launch">
+      <div class="ql-header">
+        Transición rápida
+        <span class="hint" id="hotkey-hint">Teclas 1–9 habilitadas</span>
+      </div>
+      <div id="scene-buttons-grid">
+        <div class="muted-msg">Sin escenas — conecta OBS primero.</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- LOG BAR -->
+<div id="log-bar">
+  <div id="log-text">En espera de conexión OBS…</div>
+
+</div>
+
+<script>
+// ── Transition type map to OBS transition names ──────────
+const OBS_TRANSITIONS = {
+  fade:  'Fade',
+  slide: 'Slide',
+  zoom:  'Zoom',       // Luma Wipe / custom; fallback to Fade if not installed
+  cut:   'Cut'
+};
+
+// ── State ────────────────────────────────────────────────
+let ws = null;
+let obsConnected = false;
+let currentScene = '';
+let scenes = [];
+let selectedType = 'fade';
+let hotkeysEnabled = true;
+let isTransitioning = false;
+
+const $ = id => document.getElementById(id);
+
+// ── Log helper ────────────────────────────────────────────
+function log(msg, type = '') {
+  const el = $('log-text');
+  el.textContent = msg;
+  el.className = type;
+}
+
+// ── WebSocket connection (same pattern as server.js) ──────
+function connect() {
+  const WS_URL = `ws://${location.host}`;
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => log('Servidor local conectado. Esperando OBS…', 'info');
+
+  ws.onmessage = (e) => {
+    try {
+      const { event, data } = JSON.parse(e.data);
+      handleEvent(event, data);
+    } catch(err) {}
+  };
+
+  ws.onclose = () => {
+    log('Sin conexión al servidor local. Reintentando…', 'err');
+    setTimeout(connect, 3000);
+  };
+}
+
+function send(action, payload = {}) {
+  if (ws?.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ action, ...payload }));
+}
+
+// ── OBS Connect button ────────────────────────────────────
+$('btn-obs-connect').onclick = () => {
+  const url  = $('obs-url').value.trim()  || 'ws://localhost:4455';
+  const pass = $('obs-pass').value.trim();
+  send('connectOBS', { url, password: pass });
+  log('Conectando a OBS…', 'info');
+};
+
+// ── Handle server events ──────────────────────────────────
+function handleEvent(event, data) {
+  switch(event) {
+    case 'serverState':
+      if (data.obsConnected) setOBSConnected();
+      if (data.obsState?.scenes?.length) updateScenes(data.obsState.scenes, data.obsState.currentScene);
+      break;
+
+    case 'obsConnected':
+      setOBSConnected();
+      break;
+
+    case 'obsDisconnected':
+      obsConnected = false;
+      $('obs-dot').className = 'dot disconnected';
+      $('obs-label').textContent = 'DISCONNECTED';
+      $('obs-connect-row').classList.remove('hidden');
+      log('OBS desconectado.', 'err');
+      break;
+
+    case 'scenesUpdated':
+      updateScenes(data.scenes, data.current);
+      break;
+
+    case 'sceneChanged':
+      currentScene = data.scene;
+      $('scene-badge').textContent = data.scene;
+      highlightActiveScene(data.scene);
+      break;
+  }
+}
+
+function setOBSConnected() {
+  obsConnected = true;
+  $('obs-dot').className = 'dot connected';
+  $('obs-label').textContent = 'OBS CONNECTED';
+  $('obs-connect-row').classList.add('hidden');
+  log('OBS conectado correctamente.', 'ok');
+}
+
+// ── Scene rendering ───────────────────────────────────────
+function updateScenes(sceneList, current) {
+  scenes = sceneList;
+  if (current) {
+    currentScene = current;
+    $('scene-badge').textContent = current;
+  }
+  $('scenes-count').textContent = scenes.length;
+  renderSideList();
+  renderQuickButtons();
+}
+
+function renderSideList() {
+  const list = $('scenes-list');
+  list.innerHTML = '';
+  scenes.forEach(name => {
+    const item = document.createElement('div');
+    item.className = 'scene-item' + (name === currentScene ? ' active' : '');
+    item.dataset.scene = name;
+
+    const letter = name.charAt(0).toUpperCase();
+    item.innerHTML = `
+      <div class="scene-thumb ${name === currentScene ? 'active-thumb' : ''}">
+        <span class="thumb-letter">${letter}</span>
+      </div>
+      <span class="scene-name">${name}</span>
+      ${name === currentScene ? '<span class="scene-live-dot"></span>' : ''}
+    `;
+    item.addEventListener('click', () => triggerTransition(name));
+    list.appendChild(item);
+  });
+}
+
+function renderQuickButtons() {
+  const grid = $('scene-buttons-grid');
+  grid.innerHTML = '';
+  scenes.forEach((name, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'scene-btn' + (name === currentScene ? ' active' : '');
+    btn.dataset.scene = name;
+
+    const keyHint = i < 9 ? `[${i+1}]` : '';
+    btn.innerHTML = `
+      <div class="scene-btn-index">${keyHint || '#'}</div>
+      <div class="scene-btn-name">${name}</div>
+      <div class="scene-btn-tr">${OBS_TRANSITIONS[selectedType] || selectedType}</div>
+      ${name === currentScene ? '<div class="live-indicator"><div class="live-dot"></div>LIVE</div>' : ''}
+    `;
+    btn.addEventListener('click', () => triggerTransition(name));
+    grid.appendChild(btn);
+  });
+}
+
+function highlightActiveScene(scene) {
+  document.querySelectorAll('.scene-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.scene === scene);
+    el.querySelector('.scene-thumb')?.classList.toggle('active-thumb', el.dataset.scene === scene);
+  });
+  document.querySelectorAll('.scene-btn').forEach(el => {
+    el.classList.toggle('active', el.dataset.scene === scene);
+  });
+}
+
+// ── Trigger transition ────────────────────────────────────
+function triggerTransition(targetScene) {
+  if (!obsConnected || isTransitioning || targetScene === currentScene) return;
+
+  const duration = parseInt($('duration-slider').value);
+  const type = selectedType;
+  const easing = $('easing').value;
+  const direction = $('slide-dir').value;
+
+  isTransitioning = true;
+  $('obs-dot').className = 'dot transitioning';
+
+  // Mark button as transitioning
+  document.querySelectorAll('.scene-btn').forEach(el => {
+    if (el.dataset.scene === targetScene) el.classList.add('transitioning-to');
+  });
+
+  // Visual feedback en botones
+  if (type === 'cut') {
+    playCutFX(targetScene);
+  } else {
+    playOverlayFX(type, duration, targetScene);
+  }
+
+
+
+  // 1. Set transition type in OBS
+  const obsTransName = OBS_TRANSITIONS[type];
+  send('obsCommand', {
+    type: 'SetCurrentSceneTransition',
+    data: { transitionName: obsTransName }
+  });
+
+  // 2. Set transition duration
+  send('obsCommand', {
+    type: 'SetCurrentSceneTransitionDuration',
+    data: { transitionDuration: duration }
+  });
+
+  // 3. Switch scene
+  send('obsCommand', {
+    type: 'SetCurrentProgramScene',
+    data: { sceneName: targetScene }
+  });
+
+  log(`Transición ${type.toUpperCase()} → "${targetScene}" (${duration}ms)`, 'info');
+
+  setTimeout(() => {
+    isTransitioning = false;
+    $('obs-dot').className = 'dot connected';
+
+    document.querySelectorAll('.scene-btn').forEach(el => el.classList.remove('transitioning-to'));
+    log(`✓ Escena cambiada a "${targetScene}"`, 'ok');
+  }, duration + 100);
+}
+
+function playOverlayFX(type, duration, targetScene) {
+  const dir = $('slide-dir').value;
+  const btns = document.querySelectorAll('.scene-btn');
+
+  btns.forEach(btn => {
+    // Reset
+    btn.style.setProperty('--fx-dur', duration + 'ms');
+    btn.classList.remove(
+      'fx-fade','fx-zoom','fx-cut',
+      'fx-slide-left','fx-slide-right','fx-slide-up','fx-slide-down','fx-dim'
+    );
+    void btn.offsetWidth;
+
+    const isTarget = btn.dataset.scene === targetScene;
+
+    if (isTarget) {
+      // Añadir barra de progreso si no existe
+      if (!btn.querySelector('.btn-progress')) {
+        const bar = document.createElement('div');
+        bar.className = 'btn-progress';
+        btn.appendChild(bar);
+      }
+      const bar = btn.querySelector('.btn-progress');
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      void bar.offsetWidth;
+      bar.style.transition = `width ${duration}ms linear`;
+      bar.style.width = '100%';
+      setTimeout(() => { bar.style.width = '0%'; bar.style.transition = 'none'; }, duration + 50);
+
+      // FX en el botón destino
+      if (type === 'fade')       btn.classList.add('fx-fade');
+      else if (type === 'slide') btn.classList.add('fx-slide-' + dir);
+      else if (type === 'zoom')  btn.classList.add('fx-zoom');
+    } else {
+      // Atenuar todos los demás
+      btn.classList.add('fx-dim');
+    }
+  });
+
+  // Atenuar también los items de la lista lateral
+  document.querySelectorAll('.scene-item').forEach(item => {
+    item.style.transition = `opacity ${duration * 0.3}ms ease`;
+    item.style.opacity = item.dataset.scene === targetScene ? '1' : '0.4';
+    setTimeout(() => {
+      item.style.opacity = '1';
+    }, duration * 0.7);
+  });
+
+  setTimeout(() => {
+    btns.forEach(btn => {
+      btn.classList.remove(
+        'fx-fade','fx-zoom','fx-cut',
+        'fx-slide-left','fx-slide-right','fx-slide-up','fx-slide-down','fx-dim'
+      );
+    });
+  }, duration + 60);
+}
+
+function playCutFX(targetScene) {
+  const btns = document.querySelectorAll('.scene-btn');
+  btns.forEach(btn => {
+    btn.classList.remove('fx-cut','fx-dim');
+    void btn.offsetWidth;
+    if (btn.dataset.scene === targetScene) btn.classList.add('fx-cut');
+    else btn.classList.add('fx-dim');
+  });
+  setTimeout(() => {
+    btns.forEach(btn => btn.classList.remove('fx-cut','fx-dim'));
+  }, 220);
+}
+
+// ── Transition card selection ─────────────────────────────
+document.querySelectorAll('.tr-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.tr-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedType = card.dataset.type;
+
+    // Update tr label in quick buttons
+    document.querySelectorAll('.scene-btn-tr').forEach(el => {
+      el.textContent = OBS_TRANSITIONS[selectedType] || selectedType;
+    });
+
+    // Show/hide direction only relevant for slide
+    $('slide-dir').parentElement.style.opacity = selectedType === 'slide' ? '1' : '.4';
+
+    log(`Transición seleccionada: ${selectedType.toUpperCase()}`, '');
+  });
+});
+
+// ── Duration slider ───────────────────────────────────────
+$('duration-slider').addEventListener('input', e => {
+  $('duration-val').textContent = e.target.value + 'ms';
+});
+
+// ── Hotkey toggle ─────────────────────────────────────────
+$('hotkey-toggle').addEventListener('click', () => {
+  hotkeysEnabled = !hotkeysEnabled;
+  $('hotkey-toggle').classList.toggle('on', hotkeysEnabled);
+  $('hotkey-hint').textContent = hotkeysEnabled ? 'Teclas 1–9 habilitadas' : 'Hotkeys desactivados';
+});
+
+// ── Keyboard shortcuts ────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (document.activeElement.tagName === 'INPUT') return;
+  if (!hotkeysEnabled) return;
+
+  const n = parseInt(e.key);
+  if (n >= 1 && n <= 9) {
+    const scene = scenes[n - 1];
+    if (scene) triggerTransition(scene);
+    return;
+  }
+
+  // F1-F4 to select transition type
+  const types = ['fade', 'slide', 'zoom', 'cut'];
+  const fKey = { 'F1': 0, 'F2': 1, 'F3': 2, 'F4': 3 };
+  if (fKey[e.key] !== undefined) {
+    e.preventDefault();
+    const card = document.querySelector(`.tr-card[data-type="${types[fKey[e.key]]}"]`);
+    if (card) card.click();
+  }
+});
+
+// ── Direction opacity init ────────────────────────────────
+$('slide-dir').parentElement.style.opacity = '0.4';
+
+// ── Connect ───────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>

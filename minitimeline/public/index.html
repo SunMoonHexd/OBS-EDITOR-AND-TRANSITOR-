@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minitimeline — OBS Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- HEADER -->
+    <header id="header">
+      <div class="hd-left">
+        <div id="obs-dot" class="dot disconnected"></div>
+        <span id="obs-label">OBS DISCONNECTED</span>
+        <div class="obs-connect-row" id="obs-connect-row">
+          <input id="obs-url" type="text" value="ws://localhost:4455" placeholder="ws://localhost:4455">
+          <input id="obs-pass" type="password" placeholder="contraseña (opcional)">
+          <button id="btn-obs-connect">Conectar</button>
+        </div>
+      </div>
+
+      <div class="hd-center">
+        <button id="btn-prev-marker" class="ctrl-btn" title="Marcador anterior">⏮</button>
+        <button id="btn-play-pause" class="ctrl-btn primary" title="Play/Pause [Espacio]">▶</button>
+        <button id="btn-next-marker" class="ctrl-btn" title="Marcador siguiente">⏭</button>
+        <div id="tc-display">00:00:00:00</div>
+      </div>
+
+      <div class="hd-right">
+        <button id="btn-record" class="action-btn" title="Grabar">⏺ REC</button>
+        <button id="btn-replay-toggle" class="action-btn" title="Toggle Replay Buffer">🔄 Replay</button>
+        <button id="btn-save-replay" class="action-btn accent" title="Guardar Replay">💾 Save</button>
+      </div>
+    </header>
+
+    <!-- BODY -->
+    <main id="body">
+
+      <!-- PREVIEW -->
+      <section id="preview-panel">
+        <div id="video-wrap">
+          <video id="preview-video" controls preload="metadata"></video>
+          <div id="preview-placeholder">
+            <span>Sin clip seleccionado</span>
+            <small>Carga un archivo desde el panel de assets</small>
+          </div>
+          <div id="scene-badge"></div>
+        </div>
+        <div id="trim-bar">
+          <button id="btn-mark-in" class="trim-btn">Mark In [I]</button>
+          <span id="range-text">Sin selección</span>
+          <button id="btn-mark-out" class="trim-btn">Mark Out [O]</button>
+        </div>
+        <div id="trim-bar-2">
+          <button id="btn-add-marker" class="trim-btn">🔖 Marcador [M]</button>
+          <button id="btn-export-clip" class="trim-btn export-btn">✂️ Export Clip</button>
+          <button id="btn-export-timeline" class="trim-btn export-btn" title="Exportar todos los clips del timeline en orden">🎬 Export Timeline</button>
+        </div>
+      </section>
+
+      <!-- ASSETS + SCENES -->
+      <aside id="side-panel">
+        <!-- Scenes -->
+        <div class="panel-block" id="scenes-block">
+          <div class="panel-title">ESCENAS OBS</div>
+          <div id="scenes-list"><span class="muted">Conecta OBS para ver escenas</span></div>
+        </div>
+
+        <!-- File browser -->
+        <div class="panel-block" id="files-block">
+          <div class="panel-title">
+            ARCHIVOS
+            <button id="btn-browse-up" class="mini-btn" title="Subir directorio">↑</button>
+          </div>
+          <div id="current-dir" class="current-dir"></div>
+          <div id="files-list"></div>
+        </div>
+
+        <!-- Assets en timeline -->
+        <div class="panel-block">
+          <div class="panel-title">CLIPS EN TIMELINE</div>
+          <div id="clips-list"></div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- TIMELINE -->
+    <footer id="timeline-footer">
+      <div id="tl-toolbar">
+        <div class="tl-tools">
+          <button id="tool-cursor" class="tool-btn active" title="Selección [V]">↖</button>
+          <button id="tool-blade" class="tool-btn" title="Corte [C]">✂</button>
+        </div>
+        <div class="tl-zoom">
+          🔍 <input type="range" id="zoom-slider" min="5" max="300" value="80">
+          <span id="zoom-label">80px/s</span>
+        </div>
+        <div class="tl-info">
+          <span id="selection-info">—</span>
+        </div>
+      </div>
+      <div id="tl-viewport">
+        <canvas id="tl-canvas"></canvas>
+      </div>
+    </footer>
+
+    <!-- EXPORT MODAL -->
+    <div id="export-modal" class="modal hidden">
+      <div class="modal-box">
+        <div class="modal-title">Exportando clip…</div>
+        <div id="export-progress-bar"><div id="export-progress-fill"></div></div>
+        <div id="export-status">Iniciando FFmpeg…</div>
+        <button id="btn-export-cancel" class="trim-btn">Cancelar</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
