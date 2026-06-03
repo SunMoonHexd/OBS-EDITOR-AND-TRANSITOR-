@@ -10,3 +10,7 @@ Este repositorio contiene la propuesta de diseño y desarrollo para integrar una
 * **Edición No Lineal Básica:** Selección precisa de puntos de entrada y salida (*In/Out*) y división de clips por fotogramas.
 * **Exportación Ultra Rápida:** Procesamiento optimizado (mediante copia de flujo de códec) para guardar los recortes instantáneamente sin re-codificar ni saturar la CPU/GPU.
 * **Flujo de Trabajo Centralizado:** Reducción de tiempos de post-producción directamente desde el gestor de grabaciones.
+
+
+---
+Colaboración: ajuste menor en la documentación para mejora de claridad.
